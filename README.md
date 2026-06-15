@@ -81,6 +81,8 @@ The dashboard plots values over time, grouped by `sensor`, with controls for:
 - `1 week`
 - `1 month`
 
+The dashboard also includes a delete section. It uses the same protected delete API and requires the `DELETE_MEASUREMENTS_PASSWORD` value from `.env`.
+
 Submit a measurement:
 
 ```bash
@@ -100,6 +102,15 @@ Health check:
 ```bash
 curl http://localhost:8000/health
 ```
+
+Delete measurements for one source/sensor over a time period:
+
+```bash
+curl -X DELETE 'http://localhost:8000/measurements?source=test&sensor=synthetic&start_unixtime_ms=1718200000000&end_unixtime_ms=1718203600000' \
+  -H "X-Delete-Password: your-delete-password"
+```
+
+Set `DELETE_MEASUREMENTS_PASSWORD` in `.env` before using the delete endpoint.
 
 To stop the database:
 

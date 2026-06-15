@@ -14,8 +14,8 @@ ADC_MAX = 4095
 ADC_REFERENCE_VOLTS = 3.3
 STATUS_LED = machine.Pin("LED", machine.Pin.OUT)
 ADC_CHANNELS = (
-    ("adc1", machine.ADC(27)),
-    ("adc2", machine.ADC(28)),
+    ("Battery", machine.ADC(27), 2.05),
+    ("Solar Panel", machine.ADC(28), 10.765),
 )
 
 
@@ -63,13 +63,13 @@ def read_measurements():
     timestamp_ms = unix_time_ms()
     measurements = []
 
-    for sensor, adc_channel in ADC_CHANNELS:
+    for sensor, adc_channel, gain in ADC_CHANNELS:
         adc = adc_channel.read_u16() >> 4
         measurements.append(
             {
                 "unixtime_ms": timestamp_ms,
                 "adc": adc,
-                "v_out": adc_to_volts(adc),
+                "v_out": adc_to_volts(adc) * gain,
                 "sensor": sensor,
                 "source": SOURCE,
             }

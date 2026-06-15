@@ -90,3 +90,24 @@ def list_measurements(source: str, since_unixtime_ms: int) -> list[MeasurementRo
                 (source, since_unixtime_ms),
             )
             return list(cursor.fetchall())
+
+
+def delete_measurements(
+    source: str,
+    sensor: str,
+    start_unixtime_ms: int,
+    end_unixtime_ms: int,
+) -> int:
+    with psycopg.connect(get_database_url()) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM measurements
+                WHERE source = %s
+                  AND sensor = %s
+                  AND unixtime_ms >= %s
+                  AND unixtime_ms <= %s
+                """,
+                (source, sensor, start_unixtime_ms, end_unixtime_ms),
+            )
+            return cursor.rowcount

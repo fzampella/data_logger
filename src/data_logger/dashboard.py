@@ -60,6 +60,7 @@ DASHBOARD_HTML = """
     }
 
     select,
+    input,
     button {
       background: #0d1424;
       border: 1px solid #3a4b6a;
@@ -75,6 +76,23 @@ DASHBOARD_HTML = """
 
     button:hover {
       border-color: #7aa2ff;
+    }
+
+    .danger {
+      border-color: #7f3348;
+    }
+
+    .danger h2 {
+      margin: 0 0 0.25rem;
+    }
+
+    .danger button {
+      border-color: #b9475f;
+      color: #ffd7df;
+    }
+
+    .danger button:hover {
+      border-color: #ff6f8f;
     }
 
     canvas {
@@ -146,6 +164,29 @@ DASHBOARD_HTML = """
       <canvas id="chart" width="1100" height="520"></canvas>
       <div id="legend" class="legend"></div>
     </section>
+    <section class="danger">
+      <h2>Delete Measurements</h2>
+      <p>Delete one sensor from the selected source over a time period. This cannot be undone.</p>
+      <div class="controls">
+        <label>
+          Sensor
+          <select id="deleteSensorSelect"></select>
+        </label>
+        <label>
+          Start time
+          <input id="deleteStartInput" type="datetime-local">
+        </label>
+        <label>
+          End time
+          <input id="deleteEndInput" type="datetime-local">
+        </label>
+        <label>
+          Delete password
+          <input id="deletePasswordInput" type="password" autocomplete="current-password">
+        </label>
+        <button id="deleteButton" type="button">Delete Data</button>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -153,6 +194,11 @@ DASHBOARD_HTML = """
     const metricSelect = document.querySelector("#metricSelect");
     const rangeSelect = document.querySelector("#rangeSelect");
     const refreshButton = document.querySelector("#refreshButton");
+    const deleteSensorSelect = document.querySelector("#deleteSensorSelect");
+    const deleteStartInput = document.querySelector("#deleteStartInput");
+    const deleteEndInput = document.querySelector("#deleteEndInput");
+    const deletePasswordInput = document.querySelector("#deletePasswordInput");
+    const deleteButton = document.querySelector("#deleteButton");
     const statusEl = document.querySelector("#status");
     const legendEl = document.querySelector("#legend");
     const canvas = document.querySelector("#chart");
@@ -179,12 +225,46 @@ DASHBOARD_HTML = """
       return new Date(unixtimeMs).toLocaleString();
     }
 
+    function toDateTimeLocalValue(unixtimeMs) {
+      const date = new Date(unixtimeMs);
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return localDate.toISOString().slice(0, 16);
+    }
+
+    function fromDateTimeLocalValue(value) {
+      return new Date(value).getTime();
+    }
+
     function drawEmpty(message) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "#b8c4dd";
       ctx.font = "18px system-ui";
       ctx.fillText(message, 32, 56);
       legendEl.replaceChildren();
+    }
+
+    function updateDeleteControls(measurements) {
+      const sensors = [...new Set(measurements.map((measurement) => measurement.sensor))].sort();
+      deleteSensorSelect.replaceChildren(
+        ...sensors.map((sensor) => {
+          const option = document.createElement("option");
+          option.value = sensor;
+          option.textContent = sensor;
+          return option;
+        })
+      );
+
+      deleteButton.disabled = sensors.length === 0;
+
+      if (measurements.length === 0) {
+        deleteStartInput.value = "";
+        deleteEndInput.value = "";
+        return;
+      }
+
+      const times = measurements.map((measurement) => measurement.unixtime_ms);
+      deleteStartInput.value = toDateTimeLocalValue(Math.min(...times));
+      deleteEndInput.value = toDateTimeLocalValue(Math.max(...times));
     }
 
     function getMetricLabel(metric) {
@@ -311,13 +391,66 @@ DASHBOARD_HTML = """
       const params = new URLSearchParams({ source, range });
       const measurements = await fetchJson(`/api/measurements?${params}`);
       drawChart(measurements);
+      updateDeleteControls(measurements);
       statusEl.textContent = `${measurements.length} measurements loaded.`;
+    }
+
+    async function deleteMeasurements() {
+      const source = sourceSelect.value;
+      const sensor = deleteSensorSelect.value;
+      const password = deletePasswordInput.value;
+      const startUnixtimeMs = fromDateTimeLocalValue(deleteStartInput.value);
+      const endUnixtimeMs = fromDateTimeLocalValue(deleteEndInput.value);
+
+      if (!source || !sensor) {
+        statusEl.textContent = "Select a source and sensor before deleting.";
+        return;
+      }
+
+      if (!Number.isFinite(startUnixtimeMs) || !Number.isFinite(endUnixtimeMs)) {
+        statusEl.textContent = "Select a valid delete time period.";
+        return;
+      }
+
+      if (!password) {
+        statusEl.textContent = "Enter the delete password.";
+        return;
+      }
+
+      const confirmed = confirm(
+        `Delete ${sensor} measurements from ${source} between ` +
+        `${deleteStartInput.value} and ${deleteEndInput.value}?`
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      const params = new URLSearchParams({
+        source,
+        sensor,
+        start_unixtime_ms: String(startUnixtimeMs),
+        end_unixtime_ms: String(endUnixtimeMs),
+      });
+      const response = await fetch(`/measurements?${params}`, {
+        method: "DELETE",
+        headers: { "X-Delete-Password": password },
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const result = await response.json();
+      statusEl.textContent = `${result.deleted_rows} measurements deleted.`;
+      deletePasswordInput.value = "";
+      await loadMeasurements();
     }
 
     refreshButton.addEventListener("click", () => loadMeasurements().catch(showError));
     sourceSelect.addEventListener("change", () => loadMeasurements().catch(showError));
     metricSelect.addEventListener("change", () => loadMeasurements().catch(showError));
     rangeSelect.addEventListener("change", () => loadMeasurements().catch(showError));
+    deleteButton.addEventListener("click", () => deleteMeasurements().catch(showError));
 
     function showError(error) {
       console.error(error);
