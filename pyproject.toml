@@ -1,0 +1,23 @@
+[project]
+name = "data-logger"
+version = "0.1.0"
+description = "A Python module project managed with uv."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.136.3",
+    "psycopg[binary]>=3.3.4",
+    "uvicorn[standard]>=0.49.0",
+]
+
+[project.scripts]
+data-logger = "data_logger:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
