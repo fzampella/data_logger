@@ -58,6 +58,37 @@ def insert_measurement(measurement: Measurement) -> None:
             )
 
 
+def insert_measurements(measurements: list[Measurement]) -> int:
+    if not measurements:
+        return 0
+
+    with psycopg.connect(get_database_url()) as connection:
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                """
+                INSERT INTO measurements (
+                    unixtime_ms,
+                    adc,
+                    v_out,
+                    sensor,
+                    source
+                )
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                [
+                    (
+                        measurement.unixtime_ms,
+                        measurement.adc,
+                        measurement.v_out,
+                        measurement.sensor,
+                        measurement.source,
+                    )
+                    for measurement in measurements
+                ],
+            )
+            return cursor.rowcount
+
+
 def list_sources() -> list[str]:
     with psycopg.connect(get_database_url()) as connection:
         with connection.cursor() as cursor:

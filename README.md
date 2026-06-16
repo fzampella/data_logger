@@ -94,7 +94,30 @@ curl -X POST http://localhost:8000/measurements \
     "v_out": 1.23,
     "sensor": "temperature_probe",
     "source": "bench_test"
-  }'
+}'
+```
+
+Submit multiple measurements in one request:
+
+```bash
+curl -X POST http://localhost:8000/measurements/bulk \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "unixtime_ms": 1718200000000,
+      "adc": 1234,
+      "v_out": 1.23,
+      "sensor": "Battery",
+      "source": "pico_w"
+    },
+    {
+      "unixtime_ms": 1718200000000,
+      "adc": 2345,
+      "v_out": 2.34,
+      "sensor": "Solar Panel",
+      "source": "pico_w"
+    }
+  ]'
 ```
 
 Health check:
@@ -144,7 +167,7 @@ Edit `pico_w/secrets.py`:
 ```python
 WIFI_SSID = "your-wifi-name"
 WIFI_PASSWORD = "your-wifi-password"
-API_URL = "http://YOUR_MACHINE_IP:8001/measurements"
+API_URL = "http://YOUR_MACHINE_IP:8001/measurements/bulk"
 SOURCE = "pico_w"
 ```
 
@@ -165,8 +188,10 @@ Copy these files to the Pico W:
 - `pico_w/main.py` as `main.py`
 - `pico_w/secrets.py` as `secrets.py`
 
-The Pico posts two measurements per minute:
+The Pico samples once per minute, stores unsent readings in RAM, wakes Wi-Fi every 15 minutes, sends all queued readings in one request, turns Wi-Fi off again, and uses light sleep between samples.
 
-- `sensor = "adc1"`
-- `sensor = "adc2"`
+The Pico records two measurements per sample:
+
+- `sensor = "Battery"`
+- `sensor = "Solar Panel"`
 - `source = SOURCE`

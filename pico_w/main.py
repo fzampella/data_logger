@@ -10,6 +10,7 @@ from secrets import API_URL, SOURCE, WIFI_PASSWORD, WIFI_SSID
 
 
 SAMPLE_INTERVAL_SECONDS = 60
+SEND_INTERVAL_SECONDS = 15 * 60
 ADC_MAX = 4095
 ADC_REFERENCE_VOLTS = 3.3
 STATUS_LED = machine.Pin("LED", machine.Pin.OUT)
@@ -17,6 +18,7 @@ ADC_CHANNELS = (
     ("Battery", machine.ADC(27), 2.05),
     ("Solar Panel", machine.ADC(28), 10.765),
 )
+MAX_UNSENT_MEASUREMENTS = 24 * 60 * len(ADC_CHANNELS)
 
 
 def connect_wifi():
@@ -36,6 +38,14 @@ def connect_wifi():
 
     STATUS_LED.on()
     print("Wi-Fi connected:", wlan.ifconfig())
+    return wlan
+
+
+def disconnect_wifi(wlan):
+    if wlan:
+        wlan.disconnect()
+        wlan.active(False)
+    STATUS_LED.off()
 
 
 def sync_clock():
@@ -78,12 +88,18 @@ def read_measurements():
     return measurements
 
 
-def post_measurement(measurement):
+def trim_unsent_measurements(unsent_measurements):
+    overflow = len(unsent_measurements) - MAX_UNSENT_MEASUREMENTS
+    if overflow > 0:
+        del unsent_measurements[:overflow]
+
+
+def post_measurements(measurements):
     response = None
     try:
         response = urequests.post(
             API_URL,
-            json=measurement,
+            json=measurements,
             headers={"Content-Type": "application/json"},
         )
         if response.status_code >= 300:
@@ -95,26 +111,54 @@ def post_measurement(measurement):
             response.close()
 
 
+def send_unsent_measurements(unsent_measurements):
+    if not unsent_measurements:
+        return
+
+    wlan = None
+    try:
+        wlan = connect_wifi()
+        post_measurements(unsent_measurements)
+        print("sent {} queued measurements".format(len(unsent_measurements)))
+        unsent_measurements.clear()
+        STATUS_LED.on()
+    finally:
+        disconnect_wifi(wlan)
+
+
 def sleep_until_next_sample(start_ms):
     elapsed_ms = time.ticks_diff(time.ticks_ms(), start_ms)
     sleep_ms = max(0, SAMPLE_INTERVAL_SECONDS * 1000 - elapsed_ms)
-    time.sleep_ms(sleep_ms)
+    STATUS_LED.off()
+    machine.lightsleep(sleep_ms)
 
 
 def main():
-    connect_wifi()
-    sync_clock()
+    wlan = None
+    try:
+        wlan = connect_wifi()
+        sync_clock()
+    finally:
+        disconnect_wifi(wlan)
+
+    unsent_measurements = []
+    last_send_ms = time.ticks_ms()
 
     while True:
         sample_started_ms = time.ticks_ms()
         try:
-            for measurement in read_measurements():
-                post_measurement(measurement)
-                print("sent", measurement)
-            STATUS_LED.on()
+            unsent_measurements.extend(read_measurements())
+            trim_unsent_measurements(unsent_measurements)
+            print("{} measurements waiting".format(len(unsent_measurements)))
+
+            if time.ticks_diff(sample_started_ms, last_send_ms) >= SEND_INTERVAL_SECONDS * 1000:
+                try:
+                    send_unsent_measurements(unsent_measurements)
+                finally:
+                    last_send_ms = time.ticks_ms()
         except Exception as exc:
             STATUS_LED.off()
-            print("send failed:", exc)
+            print("sample/send failed:", exc)
 
         gc.collect()
         sleep_until_next_sample(sample_started_ms)

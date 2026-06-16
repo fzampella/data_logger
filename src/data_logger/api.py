@@ -3,7 +3,7 @@ from secrets import compare_digest
 from time import time
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, Header, HTTPException, Query, status
+from fastapi import Body, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
@@ -12,6 +12,7 @@ from data_logger.dashboard import DASHBOARD_HTML
 from data_logger.db import (
     delete_measurements,
     insert_measurement,
+    insert_measurements,
     list_measurements,
     list_sources,
 )
@@ -41,6 +42,10 @@ class MeasurementCreate(BaseModel):
 
 class MeasurementCreated(BaseModel):
     status: str
+
+
+class MeasurementsCreated(BaseModel):
+    inserted_rows: int
 
 
 class MeasurementRead(BaseModel):
@@ -102,6 +107,25 @@ def create_measurement(measurement: MeasurementCreate) -> MeasurementCreated:
         ) from exc
 
     return MeasurementCreated(status="created")
+
+
+@app.post(
+    "/measurements/bulk",
+    response_model=MeasurementsCreated,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_measurements(
+    measurements: Annotated[list[MeasurementCreate], Body(min_length=1)],
+) -> MeasurementsCreated:
+    try:
+        inserted_rows = insert_measurements(measurements)
+    except PsycopgError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        ) from exc
+
+    return MeasurementsCreated(inserted_rows=inserted_rows)
 
 
 @app.delete("/measurements", response_model=MeasurementsDeleted)
