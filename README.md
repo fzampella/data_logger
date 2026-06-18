@@ -188,7 +188,7 @@ Copy these files to the Pico W:
 - `pico_w/main.py` as `main.py`
 - `pico_w/secrets.py` as `secrets.py`
 
-The Pico samples once per minute, stores unsent readings in RAM, wakes Wi-Fi every 15 minutes, sends all queued readings in one request, turns Wi-Fi off again, and uses light sleep between samples.
+The Pico samples once per minute, stores unsent readings in RAM, wakes Wi-Fi every 15 minutes, syncs time, sends all queued readings in one request, turns Wi-Fi off again, and uses light sleep between samples. Measurement timestamps are calculated from `ticks_ms()` using the latest Unix-time sync bias, so timestamps keep moving while the Pico is sleeping.
 
 The Pico records two measurements per sample:
 

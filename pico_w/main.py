@@ -19,6 +19,9 @@ ADC_CHANNELS = (
     ("Solar Panel", machine.ADC(28), 10.765),
 )
 MAX_UNSENT_MEASUREMENTS = 24 * 60 * len(ADC_CHANNELS)
+CLOCK_TICKS_MS_AT_SYNC = None
+CLOCK_UNIX_MS_AT_SYNC = None
+CLOCK_BIAS_MS = None
 
 
 def connect_wifi():
@@ -29,14 +32,15 @@ def connect_wifi():
         print("Connecting to Wi-Fi...")
         wlan.connect(WIFI_SSID, WIFI_PASSWORD)
 
-    timeout_at = time.time() + 30
+    timeout_started_ms = time.ticks_ms()
     while not wlan.isconnected():
         STATUS_LED.toggle()
         time.sleep(0.5)
-        if time.time() > timeout_at:
+        if time.ticks_diff(time.ticks_ms(), timeout_started_ms) > 30000:
             raise RuntimeError("Timed out connecting to Wi-Fi")
 
     STATUS_LED.on()
+    time.sleep(2.0)
     print("Wi-Fi connected:", wlan.ifconfig())
     return wlan
 
@@ -49,20 +53,40 @@ def disconnect_wifi(wlan):
 
 
 def sync_clock():
+    global CLOCK_BIAS_MS
+    global CLOCK_TICKS_MS_AT_SYNC
+    global CLOCK_UNIX_MS_AT_SYNC
+
     for attempt in range(3):
         try:
+            STATUS_LED.on()
             ntptime.settime()
-            print("Clock synced")
+            CLOCK_TICKS_MS_AT_SYNC = time.ticks_ms()
+            CLOCK_UNIX_MS_AT_SYNC = int(time.time() * 1000)
+            CLOCK_BIAS_MS = CLOCK_UNIX_MS_AT_SYNC - CLOCK_TICKS_MS_AT_SYNC
+            print(
+                "Clock synced: unix_ms={}, ticks_ms={}, bias_ms={}".format(
+                    CLOCK_UNIX_MS_AT_SYNC,
+                    CLOCK_TICKS_MS_AT_SYNC,
+                    CLOCK_BIAS_MS,
+                )
+            )
+            STATUS_LED.off()
             return
         except Exception as exc:
             print("Clock sync failed:", exc)
+            STATUS_LED.off()
             time.sleep(2 + attempt)
 
     raise RuntimeError("Could not sync clock with NTP")
 
 
 def unix_time_ms():
-    return int(time.time() * 1000)
+    if CLOCK_TICKS_MS_AT_SYNC is None or CLOCK_UNIX_MS_AT_SYNC is None:
+        raise RuntimeError("Clock has not been synced")
+
+    elapsed_ms = time.ticks_diff(time.ticks_ms(), CLOCK_TICKS_MS_AT_SYNC)
+    return CLOCK_UNIX_MS_AT_SYNC + elapsed_ms
 
 
 def adc_to_volts(adc):
@@ -72,6 +96,7 @@ def adc_to_volts(adc):
 def read_measurements():
     timestamp_ms = unix_time_ms()
     measurements = []
+    print(f"Taking measurement at \ntime: {timestamp_ms: 15}\ntick: {time.ticks_ms(): 15}")
 
     for sensor, adc_channel, gain in ADC_CHANNELS:
         adc = adc_channel.read_u16() >> 4
@@ -118,6 +143,7 @@ def send_unsent_measurements(unsent_measurements):
     wlan = None
     try:
         wlan = connect_wifi()
+        sync_clock()
         post_measurements(unsent_measurements)
         print("sent {} queued measurements".format(len(unsent_measurements)))
         unsent_measurements.clear()

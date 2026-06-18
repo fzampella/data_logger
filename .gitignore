@@ -10,3 +10,4 @@ dist/
 build/
 *.egg-info/
 pico_w/secrets.py
+uv.lock
