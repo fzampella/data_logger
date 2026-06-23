@@ -75,11 +75,14 @@ http://localhost:8000/
 The dashboard plots values over time, grouped by `sensor`, with controls for:
 
 - `source`
+- sensor checkboxes
 - `v_out` or `adc`
 - `1 hour`
 - `1 day`
 - `1 week`
 - `1 month`
+
+The chart automatically rescales to the selected sensor checkboxes. Hover over a point to inspect its timestamp, sensor, source, ADC value, and voltage. If present, `pico_w` appears first in the source dropdown.
 
 The dashboard also includes a delete section. It uses the same protected delete API and requires the `DELETE_MEASUREMENTS_PASSWORD` value from `.env`.
 

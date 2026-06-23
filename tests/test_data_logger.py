@@ -90,6 +90,12 @@ def test_dashboard_contains_controls():
 
     assert "Data Logger Dashboard" in html
     assert 'id="sourceSelect"' in html
+    assert 'id="sensorFilter"' in html
+    assert 'id="tooltip"' in html
+    assert "handleChartHover" in html
+    assert "chooseYTickStep" in html
+    assert "getXTicks" in html
+    assert "formatXTick" in html
     assert 'id="metricSelect"' in html
     assert 'value="v_out" selected' in html
     assert 'value="adc"' in html
@@ -98,6 +104,7 @@ def test_dashboard_contains_controls():
     assert 'id="deleteSensorSelect"' in html
     assert 'id="deletePasswordInput"' in html
     assert 'id="deleteButton"' in html
+    assert "pico_w" in html
 
 
 def test_get_sources(monkeypatch):
