@@ -5,8 +5,33 @@ A small Python module project managed with [`uv`](https://docs.astral.sh/uv/).
 ## Getting Started
 
 ```bash
-uv sync
 cp .env.example .env
+docker compose up --build
+```
+
+Open the dashboard:
+
+```bash
+http://localhost:8000/
+```
+
+The API container listens on port `8000`. Docker Compose exposes that as host
+port `8000` by default. To expose a different host port:
+
+```bash
+API_PORT=8001 docker compose up --build
+```
+
+Then open:
+
+```bash
+http://localhost:8001/
+```
+
+For local development without Dockerizing the API:
+
+```bash
+uv sync
 docker compose up -d db
 uv run data-logger
 ```
@@ -34,15 +59,40 @@ Connection string:
 postgresql://data_logger:data_logger_password@localhost:5432/data_logger
 ```
 
-## API
-
-Start the API:
+Inside Docker Compose, the API connects to the database service with host `db`:
 
 ```bash
+postgresql://data_logger:data_logger_password@db:5432/data_logger
+```
+
+## API
+
+Start the full Docker stack:
+
+```bash
+docker compose up --build
+```
+
+The API is exposed on host port `8000` by default:
+
+```bash
+http://localhost:8000/
+```
+
+To expose a different host port while keeping the container port at `8000`:
+
+```bash
+API_PORT=8001 docker compose up --build
+```
+
+For local development, start only the database and run the API with `uv`:
+
+```bash
+docker compose up -d db
 uv run data-logger
 ```
 
-To run on a different port:
+To run local development on a different port:
 
 ```bash
 PORT=8001 uv run data-logger
@@ -52,24 +102,6 @@ By default the API binds to `0.0.0.0`, so other machines on the same network can
 
 ```bash
 http://YOUR_MACHINE_IP:8000/
-```
-
-For a different port:
-
-```bash
-PORT=8001 uv run data-logger
-```
-
-To override the bind address explicitly:
-
-```bash
-HOST=0.0.0.0 PORT=8001 uv run data-logger
-```
-
-Open the dashboard:
-
-```bash
-http://localhost:8000/
 ```
 
 The dashboard plots values over time, grouped by `sensor`, with controls for:
@@ -138,11 +170,42 @@ curl -X DELETE 'http://localhost:8000/measurements?source=test&sensor=synthetic&
 
 Set `DELETE_MEASUREMENTS_PASSWORD` in `.env` before using the delete endpoint.
 
-To stop the database:
+To stop the stack:
 
 ```bash
 docker compose down
 ```
+
+## Portainer
+
+You can deploy this project in Portainer as a stack.
+
+Recommended options:
+
+- Use a Git repository stack so Portainer can access this repository and build
+  the `api` image from the included `Dockerfile`.
+- Or build and push the API image to a registry, then replace `build: .` in
+  `docker-compose.yml` with `image: your-registry/data-logger:latest`.
+
+Set these stack environment variables in Portainer if you want values other
+than the defaults:
+
+```env
+API_PORT=8000
+POSTGRES_DB=data_logger
+POSTGRES_USER=data_logger
+POSTGRES_PASSWORD=data_logger_password
+DELETE_MEASUREMENTS_PASSWORD=change-me
+```
+
+Port mapping is explicit:
+
+```yaml
+ports:
+  - "${API_PORT:-8000}:8000"
+```
+
+That maps host port `API_PORT` to container port `8000`.
 
 ## Development
 
@@ -177,7 +240,7 @@ SOURCE = "pico_w"
 Run the API so the Pico can reach it:
 
 ```bash
-HOST=0.0.0.0 PORT=8001 uv run data-logger
+API_PORT=8001 docker compose up --build
 ```
 
 Allow the Pico through UFW, replacing `PICO_IP` with its network address:

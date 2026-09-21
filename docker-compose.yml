@@ -1,4 +1,30 @@
 services:
+  api:
+    build: .
+    container_name: data_logger_api
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-data_logger}:${POSTGRES_PASSWORD:-data_logger_password}@db:5432/${POSTGRES_DB:-data_logger}
+      DELETE_MEASUREMENTS_PASSWORD: ${DELETE_MEASUREMENTS_PASSWORD:-change-me}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   db:
     image: postgres:16-alpine
     container_name: data_logger_db

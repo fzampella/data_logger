@@ -1,0 +1,10 @@
+.git
+.pytest_cache
+.uv-cache
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+!.env.example
+Dockerfile
